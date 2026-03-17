@@ -81,4 +81,51 @@ public with sharing class ProductController {
             WITH USER_MODE
         ];
     }
+
+    @AuraEnabled(Cacheable=true scope='global')
+    public static Map<String, Object> getProductMetrics() {
+        Map<String, Object> metrics = new Map<String, Object>();
+        
+        // Aggregate queries for metrics
+        AggregateResult[] categoryStats = [
+            SELECT Category__c, COUNT(Id) productCount, AVG(MSRP__c) avgPrice, MIN(MSRP__c) minPrice, MAX(MSRP__c) maxPrice
+            FROM Product__c
+            WHERE Category__c != null
+            WITH USER_MODE
+            GROUP BY Category__c
+            ORDER BY COUNT(Id) DESC
+        ];
+        
+        AggregateResult[] materialStats = [
+            SELECT Material__c, COUNT(Id) productCount, AVG(MSRP__c) avgPrice
+            FROM Product__c
+            WHERE Material__c != null
+            WITH USER_MODE
+            GROUP BY Material__c
+            ORDER BY COUNT(Id) DESC
+        ];
+        
+        AggregateResult[] levelStats = [
+            SELECT Level__c, COUNT(Id) productCount, AVG(MSRP__c) avgPrice
+            FROM Product__c
+            WHERE Level__c != null
+            WITH USER_MODE
+            GROUP BY Level__c
+            ORDER BY COUNT(Id) DESC
+        ];
+        
+        // Overall product statistics
+        AggregateResult[] overallStats = [
+            SELECT COUNT(Id) totalProducts, AVG(MSRP__c) avgPrice, MIN(MSRP__c) minPrice, MAX(MSRP__c) maxPrice
+            FROM Product__c
+            WITH USER_MODE
+        ];
+        
+        metrics.put('categoryStats', categoryStats);
+        metrics.put('materialStats', materialStats);
+        metrics.put('levelStats', levelStats);
+        metrics.put('overallStats', overallStats);
+        
+        return metrics;
+    }
 }

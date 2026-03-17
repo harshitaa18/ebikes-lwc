@@ -5,3 +5,10 @@ updates:
       schedule:
           interval: monthly
       open-pull-requests-limit: 10
+      reviewers:
+        - "harshita"
+      assignees:
+        - "harshita"
+      commit-message:
+          prefix: "deps"
+          include: "scope"

@@ -12,6 +12,11 @@ import {
 /** Use Apex to fetch related records. */
 import { refreshApex, getSObjectValue } from '@salesforce/apex';
 import getOrderItems from '@salesforce/apex/OrderController.getOrderItems';
+import createOrderItem from '@salesforce/apex/OrderController.createOrderItem';
+import updateOrderItem from '@salesforce/apex/OrderController.updateOrderItem';
+import deleteOrderItem from '@salesforce/apex/OrderController.deleteOrderItem';
+import getOrderMetrics from '@salesforce/apex/OrderController.getOrderMetrics';
+import trackMetricEvent from '@salesforce/apex/MetricsCollector.trackMetricEvent';
 
 /** Order_Item__c Schema. */
 import ORDER_ITEM_OBJECT from '@salesforce/schema/Order_Item__c';
@@ -79,10 +84,16 @@ export default class OrderBuilder extends LightningElement {
     /** Total quantity of the Order__c. Calculated from this.orderItems. */
     orderQuantity = 0;
 
+    /** Order metrics data */
+    orderMetrics;
+
     error;
 
     /** Wired Apex result so it may be programmatically refreshed. */
     wiredOrderItems;
+
+    /** Wired order metrics result */
+    wiredOrderMetrics;
 
     /** Apex load the Order__c's Order_Item_c[] and their related Product__c details. */
     @wire(getOrderItems, { orderId: '$recordId' })
@@ -92,6 +103,17 @@ export default class OrderBuilder extends LightningElement {
             this.error = value.error;
         } else if (value.data) {
             this.setOrderItems(value.data);
+        }
+    }
+
+    /** Wire method for order metrics */
+    @wire(getOrderMetrics, { orderId: '$recordId' })
+    wiredGetOrderMetrics(value) {
+        this.wiredOrderMetrics = value;
+        if (value.error) {
+            this.error = value.error;
+        } else if (value.data) {
+            this.orderMetrics = value.data;
         }
     }
 
@@ -109,33 +131,39 @@ export default class OrderBuilder extends LightningElement {
         // Product__c from LDS
         const product = JSON.parse(event.dataTransfer.getData('product'));
 
-        // build new Order_Item__c record
-        const fields = {};
-        fields[ORDER_FIELD.fieldApiName] = this.recordId;
-        fields[PRODUCT_FIELD.fieldApiName] = product.Id;
-        fields[PRICE_FIELD.fieldApiName] = Math.round(
-            getSObjectValue(product, PRODUCT_MSRP_FIELD) * DISCOUNT
-        );
-
-        // create Order_Item__c record on server
-        const recordInput = {
-            apiName: ORDER_ITEM_OBJECT.objectApiName,
-            fields
-        };
-        createRecord(recordInput)
-            .then(() => {
-                // refresh the Order_Item__c SObjects
-                return refreshApex(this.wiredOrderItems);
-            })
-            .catch((e) => {
-                this.dispatchEvent(
-                    new ShowToastEvent({
-                        title: 'Error creating order',
-                        message: reduceErrors(e).join(', '),
-                        variant: 'error'
-                    })
-                );
+        // Use new Apex method for DML operation
+        const price = Math.round(getSObjectValue(product, PRODUCT_MSRP_FIELD) * DISCOUNT);
+        
+        createOrderItem({
+            orderId: this.recordId,
+            productId: product.Id,
+            price: price,
+            qtyS: 0,
+            qtyM: 0,
+            qtyL: 0
+        })
+        .then((result) => {
+            // Track metric event
+            trackMetricEvent({
+                metricType: 'ORDER_ITEM_CREATED',
+                recordId: result.Id,
+                value: price
+            }).catch(() => {
+                // Ignore metric tracking errors
             });
+            
+            // refresh the Order_Item__c SObjects
+            return refreshApex(this.wiredOrderItems);
+        })
+        .catch((e) => {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error creating order',
+                    message: reduceErrors(e).join(', '),
+                    variant: 'error'
+                })
+            );
+        });
     }
 
     /** Handles for dragging events. */
@@ -158,24 +186,35 @@ export default class OrderBuilder extends LightningElement {
         });
         this.setOrderItems(orderItems);
 
-        // update Order_Item__c on the server
-        const recordInput = { fields: orderItemChanges };
-        updateRecord(recordInput)
-            .then(() => {
-                // if there were triggers/etc that invalidate the Apex result then we'd refresh it
-                // return refreshApex(this.wiredOrderItems);
-            })
-            .catch((e) => {
-                // error updating server so rollback to previous data
-                this.setOrderItems(previousOrderItems);
-                this.dispatchEvent(
-                    new ShowToastEvent({
-                        title: 'Error updating order item',
-                        message: reduceErrors(e).join(', '),
-                        variant: 'error'
-                    })
-                );
+        // Use new Apex method for DML operation
+        updateOrderItem({
+            orderItemId: orderItemChanges.Id,
+            price: orderItemChanges.Price__c,
+            qtyS: orderItemChanges.Qty_S__c,
+            qtyM: orderItemChanges.Qty_M__c,
+            qtyL: orderItemChanges.Qty_L__c
+        })
+        .then((result) => {
+            // Track metric event
+            trackMetricEvent({
+                metricType: 'ORDER_ITEM_UPDATED',
+                recordId: result.Id,
+                value: result.Price__c
+            }).catch(() => {
+                // Ignore metric tracking errors
             });
+        })
+        .catch((e) => {
+            // error updating server so rollback to previous data
+            this.setOrderItems(previousOrderItems);
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error updating order item',
+                    message: reduceErrors(e).join(', '),
+                    variant: 'error'
+                })
+            );
+        });
     }
 
     /** Handles event to delete Order_Item__c. */
@@ -189,23 +228,29 @@ export default class OrderBuilder extends LightningElement {
         );
         this.setOrderItems(orderItems);
 
-        // delete Order_Item__c SObject on the server
-        deleteRecord(id)
-            .then(() => {
-                // if there were triggers/etc that invalidate the Apex result then we'd refresh it
-                // return refreshApex(this.wiredOrderItems);
-            })
-            .catch((e) => {
-                // error updating server so rollback to previous data
-                this.setOrderItems(previousOrderItems);
-                this.dispatchEvent(
-                    new ShowToastEvent({
-                        title: 'Error deleting order item',
-                        message: reduceErrors(e).join(', '),
-                        variant: 'error'
-                    })
-                );
+        // Use new Apex method for DML operation
+        deleteOrderItem({ orderItemId: id })
+        .then(() => {
+            // Track metric event
+            trackMetricEvent({
+                metricType: 'ORDER_ITEM_DELETED',
+                recordId: id,
+                value: 0
+            }).catch(() => {
+                // Ignore metric tracking errors
             });
+        })
+        .catch((e) => {
+            // error updating server so rollback to previous data
+            this.setOrderItems(previousOrderItems);
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title: 'Error deleting order item',
+                    message: reduceErrors(e).join(', '),
+                    variant: 'error'
+                })
+            );
+        });
     }
 
     get hasNoOrderItems() {
