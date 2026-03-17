@@ -1,0 +1,184 @@
+<template>
+    <lightning-card title="Metrics Dashboard" icon-name="standard:analytics">
+        <div class="slds-m-around_medium">
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Loading metrics..."></lightning-spinner>
+            </template>
+
+            <template if:true={hasError}>
+                <div class="slds-notify slds-notify_alert slds-theme_error" role="alert">
+                    <span class="slds-assistive-text">Error</span>
+                    <lightning-icon icon-name="utility:error" alternative-text="Error" size="x-small"></lightning-icon>
+                    <h2>Error loading metrics: {error}</h2>
+                </div>
+            </template>
+
+            <template if:true={hasData}>
+                <!-- Action Buttons -->
+                <div class="slds-m-bottom_medium">
+                    <lightning-button 
+                        label="Track Test Metric" 
+                        onclick={handleTrackMetric}
+                        variant="brand"
+                        class="slds-m-right_small">
+                    </lightning-button>
+                    <lightning-button 
+                        label="Refresh Metrics" 
+                        onclick={handleRefresh}
+                        variant="neutral">
+                    </lightning-button>
+                </div>
+
+                <!-- Overall Statistics -->
+                <template if:true={overallStats}>
+                    <div class="slds-m-bottom_large">
+                        <h3 class="slds-text-heading_medium slds-m-bottom_small">Overall Product Statistics</h3>
+                        <template for:stat in overallStats>
+                            <div class="slds-box slds-box_x-small slds-m-bottom_small">
+                                <div class="slds-grid slds-wrap">
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Total Products:</strong> {stat.totalProducts}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Average Price:</strong> ${stat.avgPrice}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Min Price:</strong> ${stat.minPrice}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Max Price:</strong> ${stat.maxPrice}
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Category Statistics -->
+                <template if:true={categoryStats}>
+                    <div class="slds-m-bottom_large">
+                        <h3 class="slds-text-heading_medium slds-m-bottom_small">Category Breakdown</h3>
+                        <template for:stat in categoryStats>
+                            <div class="slds-box slds-box_x-small slds-m-bottom_small">
+                                <div class="slds-grid slds-wrap">
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Category:</strong> {stat.category}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Product Count:</strong> {stat.productCount}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Avg Price:</strong> ${stat.avgPrice}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Min Price:</strong> ${stat.minPrice}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Max Price:</strong> ${stat.maxPrice}
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Material Statistics -->
+                <template if:true={materialStats}>
+                    <div class="slds-m-bottom_large">
+                        <h3 class="slds-text-heading_medium slds-m-bottom_small">Material Analysis</h3>
+                        <template for:stat in materialStats>
+                            <div class="slds-box slds-box_x-small slds-m-bottom_small">
+                                <div class="slds-grid slds-wrap">
+                                    <div class="slds-col slds-size_1-of-3">
+                                        <strong>Material:</strong> {stat.material}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-3">
+                                        <strong>Product Count:</strong> {stat.productCount}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-3">
+                                        <strong>Avg Price:</strong> ${stat.avgPrice}
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Level Statistics -->
+                <template if:true={levelStats}>
+                    <div class="slds-m-bottom_large">
+                        <h3 class="slds-text-heading_medium slds-m-bottom_small">Level Analysis</h3>
+                        <template for:stat in levelStats>
+                            <div class="slds-box slds-box_x-small slds-m-bottom_small">
+                                <div class="slds-grid slds-wrap">
+                                    <div class="slds-col slds-size_1-of-3">
+                                        <strong>Level:</strong> {stat.level}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-3">
+                                        <strong>Product Count:</strong> {stat.productCount}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-3">
+                                        <strong>Avg Price:</strong> ${stat.avgPrice}
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Cross-Object Metrics -->
+                <template if:true={crossObjectMetrics.productOrderCorrelation}>
+                    <div class="slds-m-bottom_large">
+                        <h3 class="slds-text-heading_medium slds-m-bottom_small">Product-Order Correlation</h3>
+                        <template for:stat in crossObjectMetrics.productOrderCorrelation>
+                            <div class="slds-box slds-box_x-small slds-m-bottom_small">
+                                <div class="slds-grid slds-wrap">
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Category:</strong> {stat.Category__c}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Level:</strong> {stat.Level__c}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Available:</strong> {stat.availableProducts}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Ordered:</strong> {stat.orderedProducts}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-5">
+                                        <strong>Avg Price:</strong> ${stat.avgOrderPrice}
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- Price-Quantity Analysis -->
+                <template if:true={crossObjectMetrics.priceQuantityAnalysis}>
+                    <div class="slds-m-bottom_large">
+                        <h3 class="slds-text-heading_medium slds-m-bottom_small">Price-Quantity Analysis</h3>
+                        <template for:stat in crossObjectMetrics.priceQuantityAnalysis>
+                            <div class="slds-box slds-box_x-small slds-m-bottom_small">
+                                <div class="slds-grid slds-wrap">
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Price Category:</strong> {stat.priceCategory}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Order Count:</strong> {stat.orderCount}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Avg Quantity:</strong> {stat.avgQuantity}
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-4">
+                                        <strong>Total Revenue:</strong> ${stat.totalRevenue}
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </template>
+        </div>
+    </lightning-card>
+</template>
